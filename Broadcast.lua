@@ -380,7 +380,11 @@ function GC:OnMessage(sender, message, channel)
     elseif msgType == "REMOVE" then
         local peerKey = parts[2]
         if peerKey then
-            GC:RemovePeer(peerKey)
+            if channel == "CHANNEL" then
+                GC:RemovePeer(peerKey)
+            else
+                GC:RemoveMember(peerKey)
+            end
             if GC.mainFrame and GC.mainFrame:IsShown() then
                 GC:RefreshUI()
             end
