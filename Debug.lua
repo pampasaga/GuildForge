@@ -1,8 +1,8 @@
 -- GuildForge - Debug.lua
 -- Debug interface: displays scanned data in real time
 
-local GC = GuildForge
-local L  = GuildForge.L
+local GC = Agora
+local L  = Agora.L
 
 -- ─── Debug frame ──────────────────────────────────────────────────────────
 
@@ -41,76 +41,13 @@ function GC:CreateDebugUI()
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
-    -- "Scan levels" button
-    local scanBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    scanBtn:SetSize(140, 22)
-    scanBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -36)
-    scanBtn:SetText(L["DEBUG_ScanBtn"])
-    scanBtn:SetScript("OnClick", function()
-        GC:ScanProfessionLevels()
-        GC:RefreshDebug()
-        GC:Log("Scan des niveaux effectue.")
-    end)
-
-    -- "Scan recipes (open window)" button
-    local scanRecBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    scanRecBtn:SetSize(200, 22)
-    scanRecBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -62)
-    scanRecBtn:SetText("|cff00ff00Scan recettes (fenetre ouverte)|r")
-    scanRecBtn:SetScript("OnClick", function()
-        local sName, _, _, sRank, _, sMax = GetTradeSkillLine()
-        GC:Log("[DIAG] GetTradeSkillLine = " .. tostring(sName)
-               .. " rank=" .. tostring(sRank) .. " max=" .. tostring(sMax))
-        GC:Log("[DIAG] GetNumTradeSkills = " .. tostring(GetNumTradeSkills()))
-        GC:Log("[DIAG] GC._currentTradeSkill = " .. tostring(GC._currentTradeSkill))
-        local craftName = GetCraftLine and GetCraftLine() or "N/A"
-        local numCrafts = GetNumCrafts and GetNumCrafts() or 0
-        GC:Log("[DIAG] GetCraftLine = " .. tostring(craftName) .. "  GetNumCrafts = " .. tostring(numCrafts))
-
-        GC:Log("=== Scan TradeSkill ===")
-        GC:ScanTradeSkillRecipes()
-
-        if craftName and craftName ~= "UNKNOWN" and craftName ~= "N/A" then
-            GC:Log("=== Scan Craft (" .. craftName .. ") ===")
-            GC:ScanCraftRecipes()
-        else
-            GC:Log("[DIAG] No Craft window open (enchanting closed?)")
-        end
-
-        GC:RefreshDebug()
-        if GC.mainFrame and GC.mainFrame:IsShown() then
-            GC:BuildTabs()
-            GC:RefreshUI()
-        end
-    end)
-
-    -- "Broadcast" button
-    local broadBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    broadBtn:SetSize(140, 22)
-    broadBtn:SetPoint("LEFT", scanBtn, "RIGHT", 6, 0)
-    broadBtn:SetText(L["DEBUG_BroadcastBtn"])
-    broadBtn:SetScript("OnClick", function()
-        GC:SendMyData()
-        GC:Log("Broadcast envoye a la guilde.")
-    end)
-
-    -- "Request guild data" button
-    local helloBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    helloBtn:SetSize(160, 22)
-    helloBtn:SetPoint("LEFT", broadBtn, "RIGHT", 6, 0)
-    helloBtn:SetText(L["DEBUG_HelloBtn"])
-    helloBtn:SetScript("OnClick", function()
-        GC:SendHello()
-        GC:Log("HELLO envoye a la guilde.")
-    end)
-
     -- Reset DB button
     local resetBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     resetBtn:SetSize(130, 22)
-    resetBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -88)
+    resetBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -36)
     resetBtn:SetText("|cffff4444" .. (L["DEBUG_ResetDB"] or "Reset DB") .. "|r")
     resetBtn:SetScript("OnClick", function()
-        GuildForgeDB = { members = {}, version = GC.VERSION }
+        AgoraDB = { members = {}, version = GC.VERSION }
         GC:Log("|cffff4444[RESET]|r Database cleared.")
         GC:RefreshDebug()
         if GC.mainFrame and GC.mainFrame:IsShown() then
@@ -119,20 +56,121 @@ function GC:CreateDebugUI()
         end
     end)
 
+    -- Diagnostics popup
+    local diagPopup = CreateFrame("Frame", "GuildForgeDiagPopup", UIParent,
+        BackdropTemplateMixin and "BackdropTemplate" or nil)
+    diagPopup:SetSize(580, 320)
+    diagPopup:SetPoint("CENTER")
+    diagPopup:SetFrameStrata("TOOLTIP")
+    diagPopup:SetMovable(true)
+    diagPopup:EnableMouse(true)
+    diagPopup:RegisterForDrag("LeftButton")
+    diagPopup:SetScript("OnDragStart", diagPopup.StartMoving)
+    diagPopup:SetScript("OnDragStop",  diagPopup.StopMovingOrSizing)
+    diagPopup:Hide()
+    if diagPopup.SetBackdrop then
+        diagPopup:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
+            tile = true, tileSize = 32, edgeSize = 32,
+            insets = { left = 11, right = 12, top = 12, bottom = 11 },
+        })
+        diagPopup:SetBackdropColor(0.06, 0.04, 0.01, 0.98)
+    end
+
+    local diagTitle = diagPopup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    diagTitle:SetPoint("TOP", diagPopup, "TOP", 0, -14)
+    diagTitle:SetText("|cffffff00Diagnostics: copy and send to the developer|r")
+
+    local diagClose = CreateFrame("Button", nil, diagPopup, "UIPanelCloseButton")
+    diagClose:SetPoint("TOPRIGHT", diagPopup, "TOPRIGHT", -2, -2)
+    diagClose:SetScript("OnClick", function() diagPopup:Hide() end)
+
+    local diagScroll = CreateFrame("ScrollFrame", nil, diagPopup, "UIPanelScrollFrameTemplate")
+    diagScroll:SetPoint("TOPLEFT",     diagPopup, "TOPLEFT",     14, -36)
+    diagScroll:SetPoint("BOTTOMRIGHT", diagPopup, "BOTTOMRIGHT", -30, 14)
+
+    local diagBox = CreateFrame("EditBox", nil, diagScroll)
+    diagBox:SetMultiLine(true)
+    diagBox:SetFontObject("GameFontNormalSmall")
+    diagBox:SetWidth(520)
+    diagBox:SetAutoFocus(false)
+    diagBox:SetScript("OnEscapePressed", function() diagPopup:Hide() end)
+    diagBox:SetScript("OnShow", function(self) self:HighlightText() end)
+    diagScroll:SetScrollChild(diagBox)
+
+    -- Diagnostics button
+    local diagBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    diagBtn:SetSize(130, 22)
+    diagBtn:SetPoint("LEFT", resetBtn, "RIGHT", 8, 0)
+    diagBtn:SetText("Diagnostics")
+    diagBtn:SetScript("OnClick", function()
+        -- Build diagnostic text
+        local lines = {}
+        local function add(s) lines[#lines+1] = s end
+
+        local version, build, _, tocVersion = GetBuildInfo()
+        add("=== GuildForge Diagnostics ===")
+        add("Addon version : " .. GC.VERSION_STRING)
+        add("WoW client    : " .. tostring(version) .. " (build " .. tostring(build) .. ", TOC " .. tostring(tocVersion) .. ")")
+        add("")
+
+        local pName  = UnitName("player") or "?"
+        local pRealm = GetRealmName and GetRealmName() or "?"
+        local _, pClass = UnitClass("player")
+        local gName  = GetGuildInfo("player") or "none"
+        add("Player : " .. pName .. "-" .. pRealm .. " (" .. tostring(pClass) .. ")")
+        add("Guild  : " .. gName)
+        add("In guild : " .. tostring(IsInGuild()))
+        add("")
+
+        local memberCount = 0
+        if AgoraDB and AgoraDB.members then
+            for _ in pairs(AgoraDB.members) do memberCount = memberCount + 1 end
+        end
+        add("Members in DB : " .. memberCount)
+        add("")
+
+        local myKey = GC:GetMyKey()
+        local member = AgoraDB and AgoraDB.members and AgoraDB.members[myKey]
+        if member then
+            add("My professions (" .. #(member.professions or {}) .. ") :")
+            for _, prof in ipairs(member.professions or {}) do
+                add("  " .. prof.name .. " " .. prof.level .. "/" .. prof.maxLevel
+                    .. " - " .. #(prof.recipes or {}) .. " recipes"
+                    .. (prof.specialization and (" [" .. prof.specialization .. "]") or ""))
+            end
+        else
+            add("My data : not found in DB (key: " .. tostring(myKey) .. ")")
+        end
+        add("")
+
+        add("Recent logs :")
+        local logStart = math.max(1, #GC._logLines - 14)
+        for i = logStart, #GC._logLines do
+            add("  " .. (GC._logLines[i] or ""))
+        end
+
+        local text = table.concat(lines, "\n")
+        diagBox:SetText(text)
+        diagBox:HighlightText()
+        diagPopup:Show()
+    end)
+
     -- Separator
     local sep = frame:CreateTexture(nil, "BACKGROUND")
     sep:SetSize(590, 1)
-    sep:SetPoint("TOP", frame, "TOP", 0, -116)
+    sep:SetPoint("TOP", frame, "TOP", 0, -66)
     sep:SetTexture(0.5, 0.5, 0.5, 0.5)
 
     -- Scanned data area
     local dataTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    dataTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -126)
+    dataTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -76)
     dataTitle:SetText("|cff00ccff" .. L["DEBUG_MyDataTitle"] .. "|r")
 
     local dataScroll = CreateFrame("ScrollFrame", "GCDebugDataScroll", frame, "UIPanelScrollFrameTemplate")
-    dataScroll:SetPoint("TOPLEFT",  frame, "TOPLEFT",  14, -142)
-    dataScroll:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -126)
+    dataScroll:SetPoint("TOPLEFT",  frame, "TOPLEFT",  14, -92)
+    dataScroll:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -30, -76)
     dataScroll:SetHeight(200)
 
     local dataContent = CreateFrame("Frame", nil, dataScroll)
@@ -142,13 +180,13 @@ function GC:CreateDebugUI()
 
     -- Log area
     local logTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    logTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -354)
+    logTitle:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -304)
     logTitle:SetText("|cffff9900" .. L["DEBUG_LogTitle"] .. "|r")
 
     local clearLogBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     clearLogBtn:SetSize(90, 18)
-    clearLogBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 120, -352)
-    clearLogBtn:SetText(GuildForge.L and GuildForge.L["DEBUG_ClearLogs"] or "Clear logs")
+    clearLogBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 120, -302)
+    clearLogBtn:SetText(Agora.L and Agora.L["DEBUG_ClearLogs"] or "Clear logs")
     clearLogBtn:SetScript("OnClick", function()
         GC._logLines = {}
         if GC.debugFrame then
@@ -159,7 +197,7 @@ function GC:CreateDebugUI()
     end)
 
     local logScroll = CreateFrame("ScrollFrame", "GCDebugLogScroll", frame, "UIPanelScrollFrameTemplate")
-    logScroll:SetPoint("TOPLEFT",     frame, "TOPLEFT",     14, -370)
+    logScroll:SetPoint("TOPLEFT",     frame, "TOPLEFT",     14, -320)
     logScroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 12)
 
     local logContent = CreateFrame("Frame", nil, logScroll)
@@ -196,7 +234,7 @@ function GC:RefreshDebug()
     local lineH = 16
     local playerName = UnitName("player")
     local myKey      = playerName and (playerName .. "-" .. GetRealmName()) or nil
-    local member     = myKey and GuildForgeDB and GuildForgeDB.members and GuildForgeDB.members[myKey]
+    local member     = myKey and AgoraDB and AgoraDB.members and AgoraDB.members[myKey]
 
     if not member then
         addLine("|cffff4444" .. L["DEBUG_NoData"] .. "|r", y)
@@ -246,7 +284,7 @@ function GC:RefreshDebug()
     end
 
     local memberCount = 0
-    for _ in pairs(GuildForgeDB.members) do memberCount = memberCount + 1 end
+    for _ in pairs(AgoraDB.members) do memberCount = memberCount + 1 end
     y = y - lineH * 0.5
     addLine("|cffffff00" .. string.format(L["DEBUG_MembersInDB"], memberCount) .. "|r", y)
 
@@ -259,16 +297,15 @@ end
 GC._logLines = {}
 
 function GC:Log(msg)
-    local frame = GC.debugFrame
-    if not frame then return end
-
     local ts   = date("%H:%M:%S")
     local line = "|cff888888[" .. ts .. "]|r " .. msg
     table.insert(GC._logLines, line)
-
     while #GC._logLines > 50 do
         table.remove(GC._logLines, 1)
     end
+
+    local frame = GC.debugFrame
+    if not frame then return end
 
     local content = frame.logContent
     for _, fs in ipairs(frame.logLines) do fs:SetText("") end
@@ -308,7 +345,7 @@ end
 local _origScanLevels = GC.ScanProfessionLevels
 function GC:ScanProfessionLevels()
     _origScanLevels(self)
-    local member = GuildForgeDB and GuildForgeDB.members and GuildForgeDB.members[debugGetMyKey()]
+    local member = AgoraDB and AgoraDB.members and AgoraDB.members[debugGetMyKey()]
     if member then
         GC:Log("ScanProfessionLevels - " .. #(member.professions or {}) .. " metier(s) detecte(s)")
     end
@@ -318,7 +355,7 @@ end
 local _origScanRecipes = GC.ScanTradeSkillRecipes
 function GC:ScanTradeSkillRecipes()
     _origScanRecipes(self)
-    local member = GuildForgeDB and GuildForgeDB.members and GuildForgeDB.members[debugGetMyKey()]
+    local member = AgoraDB and AgoraDB.members and AgoraDB.members[debugGetMyKey()]
     if member then
         for _, prof in ipairs(member.professions or {}) do
             GC:Log("Recettes scannees : " .. prof.name .. " (" .. #prof.recipes .. " recettes)")

@@ -1,7 +1,7 @@
 -- GuildForge - Scanner.lua
 -- Scan professions (levels) and recipes (open craft window)
 
-local GC = GuildForge
+local GC = Agora
 
 -- Normalize profession names to canonical English.
 -- Handles locale differences AND accents (e.g. Ingenierie / Ingénierie -> Engineering).
@@ -148,7 +148,7 @@ local TAILORING_SPEC_INDICATORS = {
 -- Scans player profession levels via GetSkillLineInfo
 -- Does not require an open craft window
 function GC:ScanProfessionLevels()
-    if not GuildForgeDB then return end
+    if not AgoraDB then return end
 
     local _pName = (UnitName and UnitName("player")) or "Unknown"
     local _rName = ""
@@ -158,9 +158,9 @@ function GC:ScanProfessionLevels()
     end
     if _rName == "" then _rName = "Local" end
     local myKey  = _pName .. "-" .. _rName
-    GuildForge._myKey = myKey  -- cache for other functions
+    Agora._myKey = myKey  -- cache for other functions
 
-    local existing = GuildForgeDB.members[myKey] or {}
+    local existing = AgoraDB.members[myKey] or {}
 
     -- Preserve already-scanned recipes per profession
     local savedRecipes = {}
@@ -252,7 +252,7 @@ function GC:ScanProfessionLevels()
         end
     end
 
-    GuildForgeDB.members[myKey] = {
+    AgoraDB.members[myKey] = {
         name        = UnitName("player"),
         realm       = GetRealmName(),
         class       = select(2, UnitClass("player")),
@@ -264,10 +264,10 @@ end
 -- Scans all recipes from the currently open craft window
 -- Called on TRADE_SKILL_SHOW / TRADE_SKILL_UPDATE
 function GC:ScanTradeSkillRecipes()
-    if not GuildForgeDB then
+    if not AgoraDB then
         -- Defensive initialization if OnLogin has not yet run
-        GuildForgeDB = { members = {}, version = GuildForge.VERSION }
-        GC:Log("[SCAN] GuildForgeDB initialise en urgence")
+        AgoraDB = { members = {}, version = Agora.VERSION }
+        GC:Log("[SCAN] AgoraDB initialise en urgence")
     end
 
     -- Build myKey first (used by the fallbacks below)
@@ -327,10 +327,10 @@ function GC:ScanTradeSkillRecipes()
         local numR = GetNumTradeSkills and GetNumTradeSkills() or 0
         if numR > 0 then
             -- Make sure the member is in the DB before searching their professions
-            if not GuildForgeDB.members[myKey] then
+            if not AgoraDB.members[myKey] then
                 pcall(function() GC:ScanProfessionLevels() end)
             end
-            local member0 = GuildForgeDB.members[myKey]
+            local member0 = AgoraDB.members[myKey]
             if member0 then
                 for _, p in ipairs(member0.professions or {}) do
                     if p.name:find("nchant") then
@@ -351,7 +351,7 @@ function GC:ScanTradeSkillRecipes()
     GC:Log("[SCAN] myKey = " .. myKey)
 
     -- Make sure the member exists in the DB
-    if not GuildForgeDB.members[myKey] then
+    if not AgoraDB.members[myKey] then
         GC:Log("[SCAN] step 2: ScanProfessionLevels")
         local ok2, err2 = pcall(function() GC:ScanProfessionLevels() end)
         if not ok2 then
@@ -359,7 +359,7 @@ function GC:ScanTradeSkillRecipes()
         end
     end
 
-    local member = GuildForgeDB.members[myKey]
+    local member = AgoraDB.members[myKey]
     if not member then
         GC:Log("[SCAN] member nil after ScanProfessionLevels, manual creation")
         local _realm2 = ""
@@ -371,7 +371,7 @@ function GC:ScanTradeSkillRecipes()
         member = { name = _pName, realm = _realm2,
                    class = select(2, UnitClass("player")) or "WARRIOR",
                    professions = {}, timestamp = time() }
-        GuildForgeDB.members[myKey] = member
+        AgoraDB.members[myKey] = member
     end
 
     GC:Log("[SCAN] step 3: looking up profession " .. skillName)
@@ -456,7 +456,7 @@ end
 
 -- Scan via Craft API (used by Enchanting on Classic/TBC)
 function GC:ScanCraftRecipes()
-    if not GuildForgeDB then return end
+    if not AgoraDB then return end
 
     local skillName = GetCraftLine and GetCraftLine()
     if skillName and skillName ~= "UNKNOWN" then
@@ -475,10 +475,10 @@ function GC:ScanCraftRecipes()
             end
             if _rName == "" then _rName = "Local" end
             local _myKey = _pName .. "-" .. _rName
-            local _member = GuildForgeDB.members[_myKey]
+            local _member = AgoraDB.members[_myKey]
             if _member then
                 for _, p in ipairs(_member.professions or {}) do
-                    if p.name:find("nchant") or p.name:find("nchant") then
+                    if p.name:find("nchant") then
                         skillName = p.name
                         GC:Log("[CRAFT] Fallback GetCraftLine -> " .. skillName)
                         break
@@ -502,10 +502,10 @@ function GC:ScanCraftRecipes()
     if _rName == "" then _rName = "Local" end
     local myKey = _pName .. "-" .. _rName
 
-    if not GuildForgeDB.members[myKey] then
+    if not AgoraDB.members[myKey] then
         GC:ScanProfessionLevels()
     end
-    local member = GuildForgeDB.members[myKey]
+    local member = AgoraDB.members[myKey]
     if not member then return end
 
     local prof = nil
