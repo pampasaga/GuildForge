@@ -60,11 +60,6 @@ elseif RegisterAddonMessagePrefix then
     RegisterAddonMessagePrefix(GC.PREFIX)
 end
 
--- Immediate DB initialization
-if not AgoraDB then
-    AgoraDB = { members = {}, version = GC.VERSION }
-end
-
 -- Main event frame
 local eventFrame = CreateFrame("Frame")
 
@@ -197,9 +192,7 @@ function GC:GetMyKey()
 end
 
 function GC:OnLogin()
-    if not AgoraDB then
-        AgoraDB = { members = {}, version = GC.VERSION }
-    end
+    GC:InitDB()
 
     -- Scan always runs, in guild or not
     GC:After(3, function()
