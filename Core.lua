@@ -73,6 +73,7 @@ eventFrame:RegisterEvent("CRAFT_SHOW")
 eventFrame:RegisterEvent("CRAFT_UPDATE")
 eventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
 eventFrame:RegisterEvent("TRADE_SKILL_CLOSE")
+eventFrame:RegisterEvent("PLAYER_LOGOUT")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" or (event == "PLAYER_ENTERING_WORLD" and not GC._loginDone) then
@@ -143,6 +144,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 GC:SendMyData()
             end)
         end
+
+    elseif event == "PLAYER_LOGOUT" then
+        GC:SendRemove()
 
     elseif event == "PLAYER_GUILD_UPDATE" then
         if IsInGuild() then
@@ -248,6 +252,25 @@ function GC:OnLogin()
             GC:SendMyData()
             print("|cff00ccffAgora:|r " .. (GC.L and GC.L["CORE_RecipesUpdated"] or "Recipes synced with the guild."))
         end)
+    end
+
+    -- Heartbeat toutes les 5 minutes (300 secondes)
+    local HEARTBEAT_INTERVAL = 300
+
+    local ScheduleHeartbeat
+    ScheduleHeartbeat = function()
+        GC:After(HEARTBEAT_INTERVAL, function()
+            if GC._initComplete then
+                GC:SendHeartbeat()
+                GC:PurgeStaleHeartbeats()
+            end
+            ScheduleHeartbeat()  -- re-schedule regardless
+        end)
+    end
+
+    if not GC._heartbeatScheduled then
+        GC._heartbeatScheduled = true
+        ScheduleHeartbeat()
     end
 end
 
