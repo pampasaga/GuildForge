@@ -1046,67 +1046,12 @@ local function CreateDetailPanel(parent, x, y, w, h)
         panel.detailCrafters[i] = row
     end
 
-    -- Search results (members view + active search) — scroll frame
-    local srTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    srTitle:SetJustifyH("LEFT")
-    srTitle:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -12)
-    srTitle:Hide()
-    panel.srTitle = srTitle
-
-    local srSF = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-    srSF:SetPoint("TOPLEFT",     panel, "TOPLEFT",  8, -34)
-    srSF:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -26, 8)
-    srSF:Hide()
-    panel.srScrollFrame = srSF
-
-    local srSC = CreateFrame("Frame", nil, srSF)
-    srSC:SetWidth(srSF:GetWidth() or 300)
-    srSF:SetScrollChild(srSC)
-    panel.srScrollChild = srSC
-
-    -- Pre-allocated row pool in the scroll child
-    local MAX_SR_POOL = 120
-    panel.srRows = {}
-    for i = 1, MAX_SR_POOL do
-        local row = CreateFrame("Button", nil, srSC)
-        row:SetHeight(22)
-        local hl = row:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetAllPoints()
-        hl:SetColorTexture(1, 1, 1, 0.06)
-        local ic = row:CreateTexture(nil, "ARTWORK")
-        ic:SetSize(16, 16)
-        ic:SetPoint("LEFT", row, "LEFT", 0, 0)
-        row.srIcon = ic
-        local nm = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        nm:SetJustifyH("LEFT")
-        nm:SetPoint("LEFT", ic, "RIGHT", 4, 0)
-        nm:SetPoint("RIGHT", row, "RIGHT", -70, 0)
-        row.srName = nm
-        local pr = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        pr:SetJustifyH("RIGHT")
-        pr:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-        pr:SetTextColor(0.55, 0.5, 0.4)
-        row.srProf = pr
-        row:Hide()
-        panel.srRows[i] = row
-    end
-
     panel:Hide()
     return panel
 end
 
-local function HideSearchResults(panel)
-    if panel.srTitle       then panel.srTitle:Hide() end
-    if panel.srScrollFrame then panel.srScrollFrame:Hide() end
-    if panel.srMore        then panel.srMore:Hide() end
-    if panel._specWidgets  then
-        for _, w in ipairs(panel._specWidgets) do w:Hide() end
-    end
-end
-
 -- Updates the recipe detail panel
 local function ShowRecipeDetail(panel, entry, onlineCache)
-    HideSearchResults(panel)
     panel:Show()
     panel.hint:Hide()
     if panel.emptyIcon then panel.emptyIcon:Hide() end
@@ -1669,7 +1614,6 @@ function GC:CreateUI()
     -- Global counter shown in catArea when no profession is selected
     local catCounter = catArea:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     catCounter:SetPoint("LEFT",  catArea, "LEFT",  0, 0)
-    catCounter:SetPoint("RIGHT", catArea, "RIGHT", 0, 0)
     catCounter:SetJustifyH("LEFT")
     catCounter:Hide()
     frame.catCounter = catCounter
@@ -1708,6 +1652,8 @@ function GC:CreateUI()
     end)
     impBtn:SetScript("OnLeave", updateImpBg)
     frame.impBtn = impBtn
+    -- Constrain catCounter so it doesn't overlap impBtn (anchored right of catArea)
+    catCounter:SetPoint("RIGHT", catArea, "RIGHT", -(impBtn:GetWidth() + 4), 0)
 
     -- Vertical divider between left and right panels
     local divider = frame:CreateTexture(nil, "BORDER")
