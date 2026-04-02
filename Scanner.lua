@@ -541,3 +541,58 @@ function GC:ScanCraftRecipes()
     member.timestamp = time()
     if GC.mainFrame and GC.mainFrame:IsShown() then GC:RefreshUI() end
 end
+
+-- Scanne les sacs du joueur et verifie si les reactifs sont presents.
+-- reagents : liste de { name=string, count=number }
+-- Retourne : { ok=true } ou { ok=false, missing={ {name, need, have}, ... } }
+function GC:ScanBags(reagents)
+    -- Construire un inventaire des sacs
+    local inventory = {}  -- [itemName:lower()] = quantite totale
+    local NUM_BAG_SLOTS = 4
+    for bag = 0, NUM_BAG_SLOTS do
+        local slots = GetContainerNumSlots(bag)
+        if slots then
+            for slot = 1, slots do
+                local _, count = GetContainerItemInfo(bag, slot)
+                if count and count > 0 then
+                    local link = GetContainerItemLink(bag, slot)
+                    if link then
+                        local itemName = GetItemInfo(link)
+                        if itemName then
+                            local key = itemName:lower()
+                            inventory[key] = (inventory[key] or 0) + count
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Verifier chaque reactif
+    local missing = {}
+    for _, reagent in ipairs(reagents) do
+        local key  = (reagent.name or ""):lower()
+        local need = reagent.count or 1
+        local have = inventory[key] or 0
+        if have < need then
+            table.insert(missing, { name = reagent.name, need = need, have = have })
+        end
+    end
+
+    if #missing == 0 then
+        return { ok = true }
+    else
+        return { ok = false, missing = missing }
+    end
+end
+
+-- Retourne les reactifs d'une recette depuis RecipeDB, ou nil si non trouvee.
+function GC:GetRecipeReagents(profName, recipeName)
+    local lrecipe = recipeName:lower()
+    for _, entry in ipairs(GC.RecipeDB or {}) do
+        if entry.prof == profName and (entry.name or ""):lower() == lrecipe then
+            return entry.reagents
+        end
+    end
+    return nil
+end
