@@ -195,8 +195,26 @@ function GC:OnLogin()
     GC:InitDB()
 
     -- Join the Agora server-wide channel (passive listening; opt-in required to broadcast)
+    -- Two-step: join, then hide from all chat frames to avoid the "You have joined..." message
     GC:After(5, function()
         JoinChannelByName(GC.SERVER_CHANNEL)
+        GC:After(0.5, function()
+            local chanNum = GetChannelName(GC.SERVER_CHANNEL)
+            if chanNum and chanNum > 0 then
+                for i = 1, NUM_CHAT_WINDOWS or 7 do
+                    local frame = _G["ChatFrame" .. i]
+                    if frame then
+                        pcall(function()
+                            if frame.RemoveChannel then
+                                frame:RemoveChannel(chanNum)
+                            elseif ChatFrame_RemoveChannel then
+                                ChatFrame_RemoveChannel(frame, chanNum)
+                            end
+                        end)
+                    end
+                end
+            end
+        end)
     end)
 
     -- Scan always runs, in guild or not

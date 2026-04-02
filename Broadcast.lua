@@ -12,7 +12,7 @@ local CHUNK_SEP  = "\002"   -- chunk header separator (ASCII 2)
 
 GC.SERVER_CHANNEL = "Agora"
 
--- Incoming chunks being reassembled: { [senderKey] = { total, count, chunks={} } }
+-- Incoming chunks being reassembled: { ["senderKey:CHANNEL"] = { total, count, chunks={} } }
 GC.incoming = {}
 
 -- ─── Utility: split a string by a separator ───────────────────────
@@ -185,6 +185,11 @@ function GC:SendMyData()
     -- Do not broadcast if no profession scanned (avoids overwriting others' data)
     if not data.professions or #data.professions == 0 then return end
 
+    -- Copie superficielle pour ne pas muter AgoraDB
+    local raw = data
+    data = {}
+    for k, v in pairs(raw) do data[k] = v end
+
     -- Enrichir avec zone et settings du joueur
     data.zone          = GetRealZoneText and GetRealZoneText() or ""
     data.price         = GC:GetPriceDefault()
@@ -303,18 +308,21 @@ function GC:OnMessage(sender, message, channel)
         -- Do not process own data
         if senderKey == GC:GetMyKey() then return end
 
+        -- Composite key: avoids collision when a player sends on both GUILD and CHANNEL
+        local incomingKey = senderKey .. ":" .. (channel or "GUILD")
+
         -- Accumulate chunks; record the origin channel on first chunk
-        if not GC.incoming[senderKey] then
-            GC.incoming[senderKey] = { total = total, count = 0, chunks = {}, channel = channel }
+        if not GC.incoming[incomingKey] then
+            GC.incoming[incomingKey] = { total = total, count = 0, chunks = {}, channel = channel }
             -- Timeout: drop incomplete transfers after 60s to avoid memory leak
             GC:After(60, function()
-                if GC.incoming[senderKey] then
-                    GC.incoming[senderKey] = nil
+                if GC.incoming[incomingKey] then
+                    GC.incoming[incomingKey] = nil
                 end
             end)
         end
 
-        local inc = GC.incoming[senderKey]
+        local inc = GC.incoming[incomingKey]
         if not inc.chunks[idx] then
             inc.chunks[idx] = data
             inc.count = inc.count + 1
@@ -327,7 +335,7 @@ function GC:OnMessage(sender, message, channel)
                 full = full .. (inc.chunks[i] or "")
             end
             local originChannel = inc.channel
-            GC.incoming[senderKey] = nil
+            GC.incoming[incomingKey] = nil
 
             local memberData = GC:Deserialize(full)
             if memberData and memberData.name ~= "" then
