@@ -7,8 +7,8 @@ local L = GuildForge.L
 
 -- Core
 L["CORE_ScanComplete"]      = "Scan et diffusion effectues."
-L["CORE_ErrorPrefix"]       = "GuildForge erreur : "
-L["CORE_DebugErrorPrefix"]  = "GuildForge debug erreur : "
+L["CORE_ErrorPrefix"]       = "Agora erreur : "
+L["CORE_DebugErrorPrefix"]  = "Agora debug erreur : "
 
 -- UI - Buttons / Tabs
 L["UI_TabByRecipe"]         = "Par Patron"
@@ -39,7 +39,7 @@ L["UI_TooltipComponents"]   = "Composants :"
 L["UI_HeaderCoverage"]      = "%d/%d disponible(s)"
 
 -- Debug panel
-L["DEBUG_Title"]            = "GuildForge - Debug"
+L["DEBUG_Title"]            = "Agora - Debug"
 L["DEBUG_ScanBtn"]          = "Scanner mes metiers"
 L["DEBUG_BroadcastBtn"]     = "Broadcaster mes data"
 L["DEBUG_HelloBtn"]         = "Demander data guilde"
@@ -51,7 +51,7 @@ L["DEBUG_MembersInDB"]      = "Membres en base : %d"
 L["DEBUG_Timestamp"]        = "Derniere mise a jour : %s"
 
 -- Minimap button tooltip
-L["MINIMAP_Title"]          = "GuildForge"
+L["MINIMAP_Title"]          = "Agora"
 L["MINIMAP_TooltipLeft"]    = " Clic gauche : Ouvrir l'interface"
 L["MINIMAP_TooltipRight"]   = " Clic droit   : Debug"
 L["MINIMAP_TooltipDrag"]    = " Drag          : Deplacer le bouton"
@@ -118,10 +118,10 @@ L["LINK_GitHub_Desc"]       = "Code source, signalement de bugs et contributions
 L["LINK_CurseForge_Title"]  = "CurseForge"
 L["LINK_CurseForge_Desc"]   = "Téléchargez la dernière version et laissez un avis."
 L["LINK_Kofi_Title"]        = "Ko-fi"
-L["LINK_Kofi_Desc"]         = "Si GuildForge vous a evite de spammer\nle chat de guilde pour trouver un artisan,\nun cafe est le bienvenu."
-L["LINK_Credits_Title"]     = "GuildForge"
+L["LINK_Kofi_Desc"]         = "Si Agora vous a evite de spammer\nle chat de guilde pour trouver un artisan,\nun cafe est le bienvenu."
+L["LINK_Credits_Title"]     = "Agora"
 L["LINK_Credits_Desc"]      = "Créé par Pampasaga sur Spineshatter.\nAddon TBC Anniversary pour partager les recettes de votre guilde."
-L["LINK_Credits_Msg"]       = "Merci d'utiliser GuildForge !\nCréé pour la guilde <Oui Oui Baguette> sur Spineshatter.\nEnvoyez-moi des golds. |cffff0000<3|r"
+L["LINK_Credits_Msg"]       = "Merci d'utiliser Agora !\nCréé pour la guilde <Oui Oui Baguette> sur Spineshatter.\nEnvoyez-moi des golds. |cffff0000<3|r"
 L["UI_OnlineMembers"]       = "En ligne (%d)"
 L["UI_OfflineMembers"]      = "Hors ligne (%d)"
 L["UI_NoGuild"]             = "Rejoignez une guilde pour partager\nvos recettes avec vos compagnons."
@@ -139,3 +139,5 @@ L["CORE_RecipesUpdated"]    = "Patrons mis a jour avec la guilde."
 L["CORE_NewVersion"]        = "Une nouvelle version est disponible : v%s. Telechargez-la sur CurseForge !"
 L["CORE_UpdateAvailable"]   = "Mise a jour disponible !"
 L["DEBUG_ClearLogs"]        = "Effacer les logs"
+L["DB_MemberLeft"]          = "%s a quitte la guilde, donnees supprimees."
+L["BROADCAST_DataReceived"] = "Donnees recues de %s."

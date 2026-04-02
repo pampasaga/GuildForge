@@ -10,7 +10,7 @@ function GC:CreateDebugUI()
     if GC.debugFrame then return end
 
     local template = BackdropTemplateMixin and "BackdropTemplate" or nil
-    local frame = CreateFrame("Frame", "GuildForgeDebugFrame", UIParent, template)
+    local frame = CreateFrame("Frame", "AgoraDebugFrame", UIParent, template)
     frame:SetFrameStrata("DIALOG")
     frame:SetSize(620, 720)
     frame:SetPoint("CENTER", UIParent, "CENTER", 200, 0)
@@ -57,7 +57,7 @@ function GC:CreateDebugUI()
     end)
 
     -- Diagnostics popup
-    local diagPopup = CreateFrame("Frame", "GuildForgeDiagPopup", UIParent,
+    local diagPopup = CreateFrame("Frame", "AgoraDiagPopup", UIParent,
         BackdropTemplateMixin and "BackdropTemplate" or nil)
     diagPopup:SetSize(580, 320)
     diagPopup:SetPoint("CENTER")
@@ -110,7 +110,7 @@ function GC:CreateDebugUI()
         local function add(s) lines[#lines+1] = s end
 
         local version, build, _, tocVersion = GetBuildInfo()
-        add("=== GuildForge Diagnostics ===")
+        add("=== Agora Diagnostics ===")
         add("Addon version : " .. GC.VERSION_STRING)
         add("WoW client    : " .. tostring(version) .. " (build " .. tostring(build) .. ", TOC " .. tostring(tocVersion) .. ")")
         add("")
