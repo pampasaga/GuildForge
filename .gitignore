@@ -22,3 +22,7 @@ COMMANDES.txt
 # Temp
 *.tmp
 *.log
+
+# Superpowers / Playwright internal files
+.playwright-mcp/
+.superpowers/
