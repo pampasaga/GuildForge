@@ -566,7 +566,62 @@ local function BuildPatronMap(profFilter, catFilter, search, guildOnly)
                         minSkill = recipe.minSkill,
                     }
                 end
-                table.insert(guildKnown[lprof][lname].crafters, member.name)
+                table.insert(guildKnown[lprof][lname].crafters, {
+                    name          = member.name,
+                    zone          = member.zone or "",
+                    price         = member.price or "",
+                    provides_mats = member.provides_mats or false,
+                    cd_available  = recipe.cd_available,
+                    source        = "guild",
+                    class         = member.class,
+                })
+            end
+        end
+    end
+
+    -- Server peers index (same structure, deduped against guild)
+    local serverKnown = {}
+    if not guildOnly then
+        for key, peer in pairs(GC:GetPeers()) do
+            local peerData = peer and peer.data
+            if peerData then
+                for _, prof in ipairs(peerData.professions or {}) do
+                    local lprof = prof.name:lower()
+                    if not serverKnown[lprof] then serverKnown[lprof] = {} end
+                    if not profNameByLower[lprof] then profNameByLower[lprof] = prof.name end
+                    for _, recipe in ipairs(prof.recipes or {}) do
+                        local lname = recipe.name:lower()
+                        if not serverKnown[lprof][lname] then
+                            serverKnown[lprof][lname] = {
+                                crafters = {},
+                                reagents = recipe.reagents,
+                                icon     = recipe.icon,
+                                itemLink = recipe.itemLink,
+                                minSkill = recipe.minSkill,
+                            }
+                        end
+                        -- Deduplicate: skip if already a guild crafter with same name
+                        local guildEntry = guildKnown[lprof] and guildKnown[lprof][lname]
+                        local alreadyGuild = false
+                        if guildEntry then
+                            for _, gc in ipairs(guildEntry.crafters) do
+                                if gc.name == peerData.name then
+                                    alreadyGuild = true; break
+                                end
+                            end
+                        end
+                        if not alreadyGuild then
+                            table.insert(serverKnown[lprof][lname].crafters, {
+                                name          = peerData.name,
+                                zone          = peerData.zone or "",
+                                price         = peerData.price or "",
+                                provides_mats = peerData.provides_mats or false,
+                                cd_available  = recipe.cd_available,
+                                source        = "server",
+                            })
+                        end
+                    end
+                end
             end
         end
     end
@@ -626,6 +681,16 @@ local function BuildPatronMap(profFilter, catFilter, search, guildOnly)
                 if ilvl and ilvl > 0 then entryIlvl    = ilvl end
             end
 
+            -- Merge guild + server crafters
+            local mergedCrafters = {}
+            if gk then
+                for _, c in ipairs(gk.crafters) do table.insert(mergedCrafters, c) end
+            end
+            local sk = serverKnown[entry.prof:lower()] and serverKnown[entry.prof:lower()][entryName:lower()]
+            if sk then
+                for _, c in ipairs(sk.crafters) do table.insert(mergedCrafters, c) end
+            end
+
             table.insert(map[entry.prof], {
                 name      = entryName,
                 prof      = entry.prof,
@@ -636,7 +701,7 @@ local function BuildPatronMap(profFilter, catFilter, search, guildOnly)
                 spellID   = entry.spellID,
                 itemID    = entry.itemID,
                 reagents  = (gk and gk.reagents and #gk.reagents > 0) and gk.reagents or entry.reagents,
-                crafters  = gk and gk.crafters,
+                crafters  = #mergedCrafters > 0 and mergedCrafters or nil,
                 known     = gk ~= nil,
                 icon      = entryIcon,
                 itemLink  = gk and gk.itemLink,
@@ -677,6 +742,13 @@ local function BuildPatronMap(profFilter, catFilter, search, guildOnly)
                                       or recipeName:lower():find(search, 1, true)
                         if searchOk then
                             ensureProf(profName)
+                            -- Merge guild + server crafters for fallback recipes
+                            local fbCrafters = {}
+                            for _, c in ipairs(data.crafters) do table.insert(fbCrafters, c) end
+                            local sk2 = serverKnown[lprof] and serverKnown[lprof][lname]
+                            if sk2 then
+                                for _, c in ipairs(sk2.crafters) do table.insert(fbCrafters, c) end
+                            end
                             table.insert(map[profName], {
                                 name      = recipeName,
                                 prof      = profName,
@@ -685,7 +757,7 @@ local function BuildPatronMap(profFilter, catFilter, search, guildOnly)
                                 category  = nil,
                                 spellID   = nil,
                                 reagents  = data.reagents,
-                                crafters  = data.crafters,
+                                crafters  = fbCrafters,
                                 known     = true,
                                 icon      = data.icon,
                                 itemLink  = data.itemLink,
@@ -1017,24 +1089,49 @@ local function CreateDetailPanel(parent, x, y, w, h)
     candidatesLabel:Hide()
     panel.detailCandidatesLabel = candidatesLabel
 
+    -- Server section label (shown between guild and server crafters)
+    local serverLabel = craftersSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    serverLabel:SetJustifyH("LEFT")
+    serverLabel:SetTextColor(0.55, 0.55, 0.55)
+    serverLabel:Hide()
+    panel.detailServerLabel = serverLabel
+
     panel.detailCrafters = {}
     for i = 1, MAX_CRAFTERS do
         local row = CreateFrame("Frame", nil, craftersSection)
-        row:SetHeight(22)
-        row:SetPoint("TOPLEFT",  craftersSection, "TOPLEFT",  10, -(8 + 16 + (i-1)*24))
-        row:SetPoint("TOPRIGHT", craftersSection, "TOPRIGHT", -10, -(8 + 16 + (i-1)*24))
+        row:SetHeight(32)
+        row:SetPoint("TOPLEFT",  craftersSection, "TOPLEFT",  10, -(8 + 16 + (i-1)*34))
+        row:SetPoint("TOPRIGHT", craftersSection, "TOPRIGHT", -10, -(8 + 16 + (i-1)*34))
+
+        local dot = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        dot:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -2)
+        dot:SetWidth(14)
+        dot:SetJustifyH("LEFT")
+        row.dot = dot
 
         local name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         name:SetJustifyH("LEFT")
-        name:SetPoint("LEFT",  row, "LEFT",  0,  0)
-        name:SetPoint("RIGHT", row, "RIGHT", -18, 0)
+        name:SetPoint("TOPLEFT", dot, "TOPRIGHT", 2, 0)
+        name:SetPoint("RIGHT", row, "RIGHT", -74, 0)
         row.name = name
 
-        local dot = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        dot:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-        dot:SetWidth(14)
-        dot:SetJustifyH("RIGHT")
-        row.dot = dot
+        -- Zone badge (below the name)
+        local zone = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        zone:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -1)
+        zone:SetTextColor(0.65, 0.52, 0.18)
+        row.zone = zone
+
+        -- Price (right-aligned, top)
+        local price = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        price:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -2)
+        price:SetJustifyH("RIGHT")
+        row.price = price
+
+        -- Compos badge (right-aligned, bottom)
+        local mats = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        mats:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 2)
+        mats:SetJustifyH("RIGHT")
+        row.mats = mats
 
         local btn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         btn:SetSize(66, 16)
@@ -1298,63 +1395,158 @@ local function ShowRecipeDetail(panel, entry, onlineCache)
     panel.craftersSection:SetPoint("TOPRIGHT", panel.reagSection, "BOTTOMRIGHT", 0, -6)
 
     -- ── Artisans ─────────────────────────────────────────────────────────────
-    local crafters = entry.crafters or {}
-    local n        = #crafters
+    local allCrafters = entry.crafters or {}
+    local nTotal      = #allCrafters
 
-    -- Build the display list and its label
-    local displayList = {}
-
-    if n == 0 then
-        panel.detailOnlineLbl:Hide()
-        if panel.detailCandidatesLabel then panel.detailCandidatesLabel:Hide() end
-        panel.detailCraftersLabel:SetText(C_ORANGE .. (L["UI_NoCrafters"] or "Nobody has this recipe.") .. C_RESET)
-    else
-        panel.detailOnlineLbl:Show()
-        if panel.detailCandidatesLabel then panel.detailCandidatesLabel:Hide() end
-        if n == 1 then
-            panel.detailCraftersLabel:SetText("1 artisan :")
+    -- Split into guild and server lists
+    local guildCrafters  = {}
+    local serverCrafters = {}
+    for _, c in ipairs(allCrafters) do
+        if c.source == "server" then
+            table.insert(serverCrafters, c)
         else
-            panel.detailCraftersLabel:SetText(n .. " artisans :")
+            table.insert(guildCrafters, c)
         end
-        for _, c in ipairs(crafters) do table.insert(displayList, { name = c }) end
     end
 
-    local rowY0 = -26
+    -- Hide server label by default
+    if panel.detailServerLabel then panel.detailServerLabel:Hide() end
+    if panel.detailCandidatesLabel then panel.detailCandidatesLabel:Hide() end
 
-    local displayCount = math.min(#displayList, MAX_CRAFTERS)
-    for i = 1, MAX_CRAFTERS do
-        local row = panel.detailCrafters[i]
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT",  panel.craftersSection, "TOPLEFT",  10, rowY0 - (i-1)*24)
-        row:SetPoint("TOPRIGHT", panel.craftersSection, "TOPRIGHT", -10, rowY0 - (i-1)*24)
-
-        if i <= displayCount then
-            local item = displayList[i]
-            row:Show()
-            local info = onlineCache and onlineCache[item.name]
-            local isOnline = info and info.online
-
-            row.dot:SetText("")
-            local cc = isOnline
-                and ((info and info.class and CLASS_COLOR[info.class]) or C_GREEN)
-                or  C_GRAY
-            row.name:SetText(cc .. item.name .. C_RESET)
-
-            row.whisperBtn:SetText(L["UI_Whisper"] or "Whisper")
-            local capName = item.name
-            row.whisperBtn:SetScript("OnClick", function()
-                if ChatFrame_OpenChat then
-                    ChatFrame_OpenChat("/w " .. capName .. " ", DEFAULT_CHAT_FRAME)
-                end
-            end)
-            row.whisperBtn:Show()
+    if nTotal == 0 then
+        panel.detailOnlineLbl:Hide()
+        panel.detailCraftersLabel:SetText(C_ORANGE .. (L["UI_NoCrafters"] or "Nobody has this recipe.") .. C_RESET)
+    else
+        panel.detailOnlineLbl:Hide()
+        local gn = #guildCrafters
+        if gn > 0 then
+            local lbl = (gn == 1)
+                and (L["UI_CrafterCount_one"] or "1 crafter can make this:")
+                or  (L["UI_CrafterCount_many"] or "%d crafters can make this:"):format(gn)
+            panel.detailCraftersLabel:SetText(lbl)
         else
-            row:Hide()
+            panel.detailCraftersLabel:SetText("")
         end
+    end
+
+    -- Helper: render a single crafter row
+    local function RenderCrafterRow(row, crafter)
+        row:Show()
+        row.whisperBtn:Hide()
+
+        -- Dot and name color
+        if crafter.source == "guild" then
+            local info     = onlineCache and onlineCache[crafter.name]
+            local isOnline = info and info.online
+            local cc = isOnline
+                and ((info and info.class and CLASS_COLOR[info.class])
+                     or (crafter.class and CLASS_COLOR[crafter.class])
+                     or C_GREEN)
+                or  C_GRAY
+            row.name:SetText(cc .. (crafter.name or "") .. C_RESET)
+            row.dot:SetText(isOnline and "|cff00ff00\226\151\143|r" or "|cff666666\226\151\143|r")
+        else
+            row.name:SetText(C_GRAY .. (crafter.name or "") .. C_RESET)
+            row.dot:SetText("|cff666666\226\151\139|r")
+        end
+
+        -- Zone
+        if row.zone then
+            local zoneTxt = (crafter.zone and crafter.zone ~= "")
+                and ("|cff6a5a30[" .. crafter.zone .. "]|r") or ""
+            row.zone:SetText(zoneTxt)
+        end
+
+        -- Compos badge
+        if row.mats then
+            row.mats:SetText(crafter.provides_mats and "|cff55dd55[+Compos]|r" or "")
+        end
+
+        -- Price
+        if row.price then
+            local priceStr = ""
+            if crafter.price == "tips" then
+                priceStr = "|cffaaaaaa" .. (L["UI_Tips"] or "tips") .. "|r"
+            elseif crafter.price and crafter.price ~= "" then
+                local copper = tonumber(crafter.price)
+                priceStr = copper and FormatCopper(copper) or tostring(crafter.price)
+            end
+            row.price:SetText(priceStr)
+        end
+
+        -- Whisper button (guild crafters only, when online)
+        if crafter.source == "guild" then
+            local info = onlineCache and onlineCache[crafter.name]
+            if info and info.online then
+                row.whisperBtn:SetText(L["UI_Whisper"] or "Whisper")
+                local capName = crafter.name
+                row.whisperBtn:SetScript("OnClick", function()
+                    if ChatFrame_OpenChat then
+                        ChatFrame_OpenChat("/w " .. capName .. " ", DEFAULT_CHAT_FRAME)
+                    end
+                end)
+                row.whisperBtn:Show()
+            end
+        end
+    end
+
+    -- Layout: guild rows, then optional server divider, then server rows
+    local ROW_H   = 34
+    local rowY0   = -26
+    local rowIdx  = 0
+    local totalY  = 0
+
+    -- Guild crafters (cap at MAX_CRAFTERS total)
+    local guildCap = math.min(#guildCrafters, MAX_CRAFTERS)
+    for gi = 1, guildCap do
+        rowIdx = rowIdx + 1
+        local row = panel.detailCrafters[rowIdx]
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT",  panel.craftersSection, "TOPLEFT",  10, rowY0 - (rowIdx-1)*ROW_H)
+        row:SetPoint("TOPRIGHT", panel.craftersSection, "TOPRIGHT", -10, rowY0 - (rowIdx-1)*ROW_H)
+        RenderCrafterRow(row, guildCrafters[gi])
+    end
+    totalY = rowY0 - rowIdx * ROW_H
+
+    -- Server divider + server crafters
+    local serverShown = 0
+    if #serverCrafters > 0 and rowIdx < MAX_CRAFTERS then
+        -- Show server section label
+        if panel.detailServerLabel then
+            local sn = #serverCrafters
+            local serverLbl = "Server (" .. sn .. ")"
+            panel.detailServerLabel:SetText("|cff888888" .. serverLbl .. "|r")
+            panel.detailServerLabel:ClearAllPoints()
+            panel.detailServerLabel:SetPoint("TOPLEFT", panel.craftersSection, "TOPLEFT", 10, totalY - 4)
+            panel.detailServerLabel:Show()
+            totalY = totalY - 16
+        end
+
+        local serverCap = math.min(#serverCrafters, MAX_CRAFTERS - rowIdx)
+        for si = 1, serverCap do
+            rowIdx = rowIdx + 1
+            serverShown = serverShown + 1
+            local row = panel.detailCrafters[rowIdx]
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT",  panel.craftersSection, "TOPLEFT",  10, totalY - (serverShown-1)*ROW_H)
+            row:SetPoint("TOPRIGHT", panel.craftersSection, "TOPRIGHT", -10, totalY - (serverShown-1)*ROW_H)
+            RenderCrafterRow(row, serverCrafters[si])
+        end
+        totalY = totalY - serverShown * ROW_H
+    end
+
+    -- Hide unused rows
+    for i = rowIdx + 1, MAX_CRAFTERS do
+        local row = panel.detailCrafters[i]
+        row:Hide()
+        if row.zone  then row.zone:SetText("")  end
+        if row.price then row.price:SetText("") end
+        if row.mats  then row.mats:SetText("")  end
     end
 
     -- craftersSection height based on actual content
-    local crafterH = (n == 0) and 42 or (8 + 18 + n * 24 + 10)
+    local crafterH = (nTotal == 0) and 42
+        or (math.abs(totalY) + 10)
     panel.craftersSection:SetHeight(crafterH)
 end
 
@@ -2382,6 +2574,7 @@ function GC:RefreshUI()
         end
         if dp.detailCandidatesLabel then dp.detailCandidatesLabel:Hide() end
         if dp.detailCraftersLabel then dp.detailCraftersLabel:Hide() end
+        if dp.detailServerLabel then dp.detailServerLabel:Hide() end
         for i = 1, MAX_CRAFTERS do
             if dp.detailCrafters and dp.detailCrafters[i] then
                 dp.detailCrafters[i]:Hide()
