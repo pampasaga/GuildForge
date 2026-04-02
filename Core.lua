@@ -194,6 +194,11 @@ end
 function GC:OnLogin()
     GC:InitDB()
 
+    -- Join the Agora server-wide channel (passive listening; opt-in required to broadcast)
+    GC:After(5, function()
+        JoinChannelByName(GC.SERVER_CHANNEL)
+    end)
+
     -- Scan always runs, in guild or not
     GC:After(3, function()
         GC:ScanProfessionLevels()
@@ -231,7 +236,7 @@ end
 -- Single entry point for addon messages (real or simulated)
 function GC:OnAddonMessage(prefix, message, channel, sender)
     if prefix == GC.PREFIX then
-        GC:OnMessage(sender, message)
+        GC:OnMessage(sender, message, channel)
     end
 end
 
